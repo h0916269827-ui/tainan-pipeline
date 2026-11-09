@@ -35,6 +35,20 @@ export function createApp(cfg,fetcher=fetch){
   const body=await r.json();return {status:r.status,body};
  }
  async function read(token){
+  // Public visitors read the public file directly rather than sharing an
+  // anonymous API quota with every service on the hosting platform.
+  if(!token){
+   const rawBase=`https://raw.githubusercontent.com/${cfg.repo}/${encodeURIComponent(cfg.branch||'main')}/`;
+   const r=await fetcher(rawBase+'project_working_state.json?t='+Date.now(),{signal:AbortSignal.timeout(20000),headers:{'Cache-Control':'no-cache'}});
+   if(r.status===404){
+    const probe=await fetcher(rawBase+'README.md',{signal:AbortSignal.timeout(20000)});
+    if(!probe.ok)throw Error('公開儲存庫無法讀取');
+    return {sha:null,state:null};
+   }
+   if(!r.ok)throw Error('公開資料讀取失敗');
+   const bytes=Buffer.from(await r.arrayBuffer());
+   return {sha:createHash('sha1').update(Buffer.from(`blob ${bytes.length}\0`)).update(bytes).digest('hex'),state:validateState(JSON.parse(bytes.toString('utf8')))};
+  }
   const r=await github(endpoint+'?ref='+encodeURIComponent(cfg.branch||'main'),token);
   if(r.status===404){
    const repo=await github(`https://api.github.com/repos/${cfg.repo}`,token);
@@ -95,7 +109,7 @@ export function createApp(cfg,fetcher=fetch){
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});return res.end(html);
    }
    json(res,404,{error:'找不到頁面'});
-  }catch{json(res,503,{error:'目前無法讀取或儲存雲端資料，請稍後重試。未使用舊資料覆蓋雲端。'});}
+  }catch(error){console.error('Cloud request failed:',error.name,error.message);json(res,503,{error:'目前無法讀取或儲存雲端資料，請稍後重試。未使用舊資料覆蓋雲端。'});}
  };
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
@@ -103,3 +117,4 @@ if(process.argv[1]===fileURLToPath(import.meta.url)){
  const app=createApp({origin:e.APP_ORIGIN,repo:e.GITHUB_REPO,branch:e.GITHUB_BRANCH||'main',key:e.SESSION_KEY,clientId:e.GITHUB_CLIENT_ID,clientSecret:e.GITHUB_CLIENT_SECRET,ownerId:e.GITHUB_OWNER_ID,html:e.HTML_PATH||new URL('./index.html.gz',import.meta.url)});
  http.createServer(app).listen(Number(e.PORT||3000),'0.0.0.0');
 }
+
