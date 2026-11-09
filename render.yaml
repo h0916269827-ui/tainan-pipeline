@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: tainan-pipeline
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    buildFilter:
+      ignoredPaths:
+        - project_working_state.json
+    envVars:
+      - key: APP_ORIGIN
+        sync: false
+      - key: GITHUB_REPO
+        sync: false
+      - key: GITHUB_BRANCH
+        value: main
+      - key: GITHUB_OWNER_ID
+        value: "270088697"
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: SESSION_KEY
+        sync: false
